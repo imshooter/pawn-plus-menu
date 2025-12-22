@@ -60,4 +60,5 @@ public OnPlayerCommandText(playerid, cmdtext[]) {
     return 0;
 }
 ```
-<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/dc660b1e-3389-4403-81f3-1cf86c76bdec" />
+<img width="1919" height="1071" alt="image" src="https://github.com/user-attachments/assets/9cc892c9-1b97-4429-8ae6-fc206bb7f8e7" />
+
