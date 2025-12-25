@@ -272,9 +272,8 @@ stock bool:AddItemToMenu(playerid, column, const format[], OPEN_MP_TAGS:...) {
             return false;
         }
 
-        list_get_arr(gMenuItem[playerid], last, data);
         strpack(data[E_MENU_R_COLUMN], buffer);
-        list_set_arr(gMenuItem[playerid], last, data);
+        list_set_cell(gMenuItem[playerid], last, E_MENU_R_COLUMN, buffer);
     } else {
         strpack(data[E_MENU_L_COLUMN], buffer);
         list_add_arr(gMenuItem[playerid], data);
