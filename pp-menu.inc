@@ -53,11 +53,9 @@ enum _:E_ASYNC_MENU_DATA {
     E_ASYNC_MENU_LISTITEM
 };
 
-enum {
+static enum {
     MENU_RESPONSE_UP,
-    MENU_RESPONSE_DOWN,
-    MENU_RESPONSE_SELECT,
-    MENU_RESPONSE_CLOSE
+    MENU_RESPONSE_DOWN
 };
 
 static enum _:E_MENU_DATA {
@@ -312,28 +310,6 @@ stock bool:HideListMenu(playerid) {
 
 hook OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys) {
     if (gMenuList[playerid] != INVALID_LIST) {
-        if ((newkeys & KEY_SECONDARY_ATTACK) && (GetTickCount() - gMenuCooldown[playerid]) >= 200) {
-            new const
-                Task:t = gMenuTask[playerid]
-            ;
-
-            gMenuTask[playerid] = INVALID_TASK;
-            gMenuCooldown[playerid] = GetTickCount();
-
-            DestroyMenuTextDrawInternal(playerid);
-            PlayerPlaySound(playerid, MENU_SOUND_CLOSE, 0.0, 0.0, 0.0);
-
-            new
-                responses[E_ASYNC_MENU_DATA]
-            ;
-
-            responses[E_ASYNC_MENU_RESPONSE] = MENU_RESPONSE_CLOSE;
-            responses[E_ASYNC_MENU_LISTITEM] = gMenuListItem[playerid];
-            task_set_result_arr(t, responses);
-
-            return 0;
-        }
-
         if ((newkeys & KEY_SPRINT) && (GetTickCount() - gMenuCooldown[playerid]) >= 200) {
             new const
                 Task:t = gMenuTask[playerid]
@@ -352,7 +328,29 @@ hook OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys) {
                 responses[E_ASYNC_MENU_DATA]
             ;
 
-            responses[E_ASYNC_MENU_RESPONSE] = MENU_RESPONSE_SELECT;
+            responses[E_ASYNC_MENU_RESPONSE] = true;
+            responses[E_ASYNC_MENU_LISTITEM] = gMenuListItem[playerid];
+            task_set_result_arr(t, responses);
+
+            return 0;
+        }
+
+        if ((newkeys & KEY_SECONDARY_ATTACK) && (GetTickCount() - gMenuCooldown[playerid]) >= 200) {
+            new const
+                Task:t = gMenuTask[playerid]
+            ;
+
+            gMenuTask[playerid] = INVALID_TASK;
+            gMenuCooldown[playerid] = GetTickCount();
+
+            DestroyMenuTextDrawInternal(playerid);
+            PlayerPlaySound(playerid, MENU_SOUND_CLOSE, 0.0, 0.0, 0.0);
+
+            new
+                responses[E_ASYNC_MENU_DATA]
+            ;
+
+            responses[E_ASYNC_MENU_RESPONSE] = false;
             responses[E_ASYNC_MENU_LISTITEM] = gMenuListItem[playerid];
             task_set_result_arr(t, responses);
         }
