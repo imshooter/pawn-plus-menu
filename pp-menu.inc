@@ -3,11 +3,7 @@
 #endif
 #define _INC_PP_MENU
 
-#include <PawnPlus>
-
-#include <YSI_Coding\y_hooks>
-#include <YSI_Coding\y_va>
-#include <YSI_Coding\y_inline>
+#include <pp-hooks>
 
 /**
  * # Header
@@ -48,11 +44,14 @@
         (1085)
 #endif
 
-#define MENU_CB_NONE (Func:0<ii>)
-
 const static
     MAX_MENU_PAGE_ROWS = 8
 ;
+
+enum _:E_ASYNC_MENU_DATA {
+    E_ASYNC_MENU_RESPONSE,
+    E_ASYNC_MENU_LISTITEM
+};
 
 enum {
     MENU_RESPONSE_UP,
@@ -62,13 +61,13 @@ enum {
 };
 
 static enum _:E_MENU_DATA {
-    E_MENU_L_COLUMN[MAX_MENU_ITEM_LENGTH char],
-    E_MENU_R_COLUMN[MAX_MENU_ITEM_LENGTH char]
+    E_MENU_L_COLUMN[MAX_MENU_ITEM_LENGTH],
+    E_MENU_R_COLUMN[MAX_MENU_ITEM_LENGTH]
 };
 
 static
-    List:gMenuItem[MAX_PLAYERS],
-    Func:gMenuCallback[MAX_PLAYERS]<ii>,
+    List:gMenuList[MAX_PLAYERS],
+    Task:gMenuTask[MAX_PLAYERS],
     gMenuItemSize[MAX_PLAYERS],
     gMenuRowCount[MAX_PLAYERS],
     gMenuListItem[MAX_PLAYERS],
@@ -86,9 +85,9 @@ static
  * # Functions
  */
 
-forward bool:AddItemToMenu(playerid, column, const format[], OPEN_MP_TAGS:...);
-forward bool:ShowMenuCallback(playerid, Func:cb<ii>, const format[], Float:x, Float:y, Float:width, bool:cancelSelectSound = false, OPEN_MP_TAGS:...);
-forward bool:HideCurrentMenu(playerid);
+forward bool:AddListMenuItem(playerid, column, const item[]);
+forward Task:ShowAsyncListMenu(playerid, const title[], Float:x, Float:y, Float:width, bool:cancelSelectSound = false);
+forward bool:HideListMenu(playerid);
 
 /**
  * # Internal
@@ -103,7 +102,7 @@ static void:CreateMenuTextDrawInternal(playerid, const title[], Float:x, Float:y
 
     new const
         Float:X = BORDER_SPACING_X + width,
-        Float:H = clamp(gMenuItemSize[playerid] + 1, 0, MAX_MENU_PAGE_ROWS) * LETTER_SPACING_Y + BORDER_SPACING_Y * 2.0
+        Float:H = clamp((gMenuItemSize[playerid] + 1), 0, MAX_MENU_PAGE_ROWS) * LETTER_SPACING_Y + BORDER_SPACING_Y * 2.0
     ;
 
     gMenuTextID[playerid][0] = CreatePlayerTextDraw(playerid, x, y, "LD_DUAL:BLACK");
@@ -121,41 +120,41 @@ static void:CreateMenuTextDrawInternal(playerid, const title[], Float:x, Float:y
     PlayerTextDrawSetProportional(playerid, gMenuTextID[playerid][1], true);
     PlayerTextDrawShow(playerid, gMenuTextID[playerid][1]);
 
-    // `1.800` -> LetterSize
-    y += BORDER_SPACING_Y - 1.800 / 2.0;
+    // `1.8` -> LetterSize
+    y += BORDER_SPACING_Y - 1.8 / 2.0;
 
     #define LETTER_COLOUR(%0) \
         ((%0) ? 0x555E70FF : 0xA3C2EBFF)
 
-    for (new i; i != MAX_MENU_PAGE_ROWS; ++i) {
-        gMenuItemColumn1TextID[playerid][i] = CreatePlayerTextDraw(playerid, x, y + LETTER_SPACING_Y * i, "");
-        PlayerTextDrawLetterSize(playerid, gMenuItemColumn1TextID[playerid][i], 0.460, 1.800);
-        PlayerTextDrawColour(playerid, gMenuItemColumn1TextID[playerid][i], LETTER_COLOUR(i));
-        PlayerTextDrawSetShadow(playerid, gMenuItemColumn1TextID[playerid][i], 2);
-        PlayerTextDrawSetProportional(playerid, gMenuItemColumn1TextID[playerid][i], true);
+    new
+        PlayerText:pt
+    ;
 
-        gMenuItemColumn2TextID[playerid][i] = CreatePlayerTextDraw(playerid, X, y + LETTER_SPACING_Y * i, "");
-        PlayerTextDrawLetterSize(playerid, gMenuItemColumn2TextID[playerid][i], 0.460, 1.800);
-        PlayerTextDrawAlignment(playerid, gMenuItemColumn2TextID[playerid][i], TEXT_DRAW_ALIGN_RIGHT);
-        PlayerTextDrawColour(playerid, gMenuItemColumn2TextID[playerid][i], LETTER_COLOUR(i));
-        PlayerTextDrawSetShadow(playerid, gMenuItemColumn2TextID[playerid][i], 2);
-        PlayerTextDrawSetProportional(playerid, gMenuItemColumn2TextID[playerid][i], true);
+    for (new i; i != MAX_MENU_PAGE_ROWS; ++i) {
+        pt = gMenuItemColumn1TextID[playerid][i] = CreatePlayerTextDraw(playerid, x, y + LETTER_SPACING_Y * i, "");
+        PlayerTextDrawLetterSize(playerid, pt, 0.460, 1.800);
+        PlayerTextDrawColour(playerid, pt, LETTER_COLOUR(i));
+        PlayerTextDrawSetShadow(playerid, pt, 2);
+        PlayerTextDrawSetProportional(playerid, pt, true);
+
+        pt = gMenuItemColumn2TextID[playerid][i] = CreatePlayerTextDraw(playerid, X, y + LETTER_SPACING_Y * i, "");
+        PlayerTextDrawLetterSize(playerid, pt, 0.460, 1.800);
+        PlayerTextDrawAlignment(playerid, pt, TEXT_DRAW_ALIGN_RIGHT);
+        PlayerTextDrawColour(playerid, pt, LETTER_COLOUR(i));
+        PlayerTextDrawSetShadow(playerid, pt, 2);
+        PlayerTextDrawSetProportional(playerid, pt, true);
     }
 
     #undef LETTER_COLOUR
 }
 
 static void:ResetMenuDataInternal(playerid) {
-    if (list_valid(gMenuItem[playerid])) {
-        list_delete(gMenuItem[playerid]);
+    if (list_valid(gMenuList[playerid])) {
+        list_delete(gMenuList[playerid]);
     }
 
-    if (gMenuCallback[playerid] != MENU_CB_NONE) {
-        Indirect_Release(gMenuCallback[playerid]);
-    }
-
-    gMenuItem[playerid] = INVALID_LIST;
-    gMenuCallback[playerid] = MENU_CB_NONE;
+    gMenuTask[playerid] = INVALID_TASK;
+    gMenuList[playerid] = INVALID_LIST;
 }
 
 static void:DestroyMenuTextDrawInternal(playerid) {
@@ -204,22 +203,13 @@ static void:UpdateMenuListRowColourInternal(playerid, response, row) {
 }
 
 static void:UpdateMenuListRowsInternal(playerid, start = 0) {
-    new
-        Iter:it = list_iter(gMenuItem[playerid], start),
-        row,
-        data[E_MENU_DATA],
-        buffer[MAX_MENU_ITEM_LENGTH]
-    ;
+    for (new Iter:iter = list_iter(gMenuList[playerid], start), data[E_MENU_DATA], row; iter_inside(iter) && row != MAX_MENU_PAGE_ROWS; iter_move_next(iter), ++row) {
+        iter_get_arr(iter, data);
 
-    for (; iter_inside(it) && row != MAX_MENU_PAGE_ROWS; iter_move_next(it), ++row) {
-        iter_get_arr(it, data);
-
-        strunpack(buffer, data[E_MENU_L_COLUMN]);
-        PlayerTextDrawSetString(playerid, gMenuItemColumn1TextID[playerid][row], buffer);
+        PlayerTextDrawSetString(playerid, gMenuItemColumn1TextID[playerid][row], data[E_MENU_L_COLUMN]);
         PlayerTextDrawShow(playerid, gMenuItemColumn1TextID[playerid][row]);
 
-        strunpack(buffer, data[E_MENU_R_COLUMN]);
-        PlayerTextDrawSetString(playerid, gMenuItemColumn2TextID[playerid][row], buffer);
+        PlayerTextDrawSetString(playerid, gMenuItemColumn2TextID[playerid][row], data[E_MENU_R_COLUMN]);
         PlayerTextDrawShow(playerid, gMenuItemColumn2TextID[playerid][row]);
     }
 }
@@ -228,100 +218,86 @@ static void:UpdateMenuListRowsInternal(playerid, start = 0) {
  * # External
  */
 
-stock bool:AddItemToMenu(playerid, column, const format[], OPEN_MP_TAGS:...) {
+stock bool:AddListMenuItem(playerid, column, const item[]) {
     if (!IsPlayerConnected(playerid)) {
         return false;
     }
 
     if (!(0 <= column <= 1)) {
-        Debug_Fatal("(AddItemToMenu) -> The `column` parameter is not within the range of `0` to `1`.");
+        printf("(AddItemToMenu) -> The `column` parameter is not within the range of `0` to `1`.");
 
         return false;
     }
 
     if (gMenuItemSize[playerid] >= MAX_MENU_ITEMS) {
-        Debug_Warning("(AddItemToMenu) -> Cannot add more items: menu has reached the maximum number of items.");
+        printf("(AddItemToMenu) -> Cannot add more items: menu has reached the maximum number of items.");
 
         return false;
     }
 
-    if (!list_valid(gMenuItem[playerid])) {
-        gMenuItem[playerid] = list_new();
+    if (!list_valid(gMenuList[playerid])) {
+        gMenuList[playerid] = list_new();
     }
 
     new
-        data[E_MENU_DATA],
-        buffer[MAX_MENU_ITEM_LENGTH]
+        data[E_MENU_DATA]
     ;
-
-    Format(
-        buffer,
-        _,
-        format,
-        ___(3)
-    );
 
     if (column == 1) {
         new const
-            last = (list_size(gMenuItem[playerid]) - 1)
+            last = (list_size(gMenuList[playerid]) - 1)
         ;
 
         if (last == -1) {
-            Debug_Fatal("(AddItemToMenu) -> Cannot add information to column `1` without an existing item in column `0`.");
+            printf("(AddItemToMenu) -> Cannot add information to column `1` without an existing item in column `0`.");
 
             return false;
         }
 
-        strpack(data[E_MENU_R_COLUMN], buffer);
-        list_set_cell(gMenuItem[playerid], last, E_MENU_R_COLUMN, buffer);
-    } else {
-        strpack(data[E_MENU_L_COLUMN], buffer);
-        list_add_arr(gMenuItem[playerid], data);
+        list_get_arr(gMenuList[playerid], last, data);
+        strcat(data[E_MENU_R_COLUMN], item);
+        list_set_arr(gMenuList[playerid], last, data);
+
+        return true;
     }
+
+    strcat(data[E_MENU_L_COLUMN], item);
+    list_add_arr(gMenuList[playerid], data);
 
     return true;
 }
 
-stock bool:ShowMenuCallback(playerid, Func:cb<ii>, const format[], Float:x, Float:y, Float:width, bool:cancelSelectSound = false, OPEN_MP_TAGS:...) {
+stock Task:ShowAsyncListMenu(playerid, const title[], Float:x, Float:y, Float:width, bool:cancelSelectSound = false) {
     if (!IsPlayerConnected(playerid)) {
-        return false;
+        return INVALID_TASK;
     }
 
-    if (gMenuCallback[playerid] != MENU_CB_NONE) {
-        return false;
+    if (task_valid(gMenuTask[playerid])) {
+        task_delete(gMenuTask[playerid]);
     }
 
-    Indirect_Claim(cb);
+    new const
+        Task:t = task_new()
+    ;
     
-    gMenuCallback[playerid] = cb;
+    gMenuTask[playerid] = t;
     gMenuRowCount[playerid] = 0;
     gMenuListItem[playerid] = 0;
-    gMenuItemSize[playerid] = (list_size(gMenuItem[playerid]) - 1);
+    gMenuItemSize[playerid] = (list_size(gMenuList[playerid]) - 1);
     gMenuCancelSelectSound[playerid] = cancelSelectSound;
 
-    new
-        buffer[MAX_MENU_TITLE_LENGTH]
-    ;
-
-    Format(
-        buffer,
-        _,
-        format,
-        ___(7)
-    );
-
-    CreateMenuTextDrawInternal(playerid, buffer, x, y, width);
+    CreateMenuTextDrawInternal(playerid, title, x, y, width);
     UpdateMenuListRowsInternal(playerid);
 
-    return true;
+    return t;
 }
 
-stock bool:HideCurrentMenu(playerid) {
+stock bool:HideListMenu(playerid) {
     if (!IsPlayerConnected(playerid)) {
         return false;
     }
 
-    if (gMenuCallback[playerid] == MENU_CB_NONE) {
+    if (gMenuList[playerid] == INVALID_LIST) {
         return false;
     }
 
@@ -335,45 +311,60 @@ stock bool:HideCurrentMenu(playerid) {
  */
 
 hook OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys) {
-    if (gMenuCallback[playerid] != MENU_CB_NONE) {
-        new const
-            Func:cb<ii> = gMenuCallback[playerid]
-        ;
-
+    if (gMenuList[playerid] != INVALID_LIST) {
         if ((newkeys & KEY_SECONDARY_ATTACK) && (GetTickCount() - gMenuCooldown[playerid]) >= 200) {
+            new const
+                Task:t = gMenuTask[playerid]
+            ;
+
+            gMenuTask[playerid] = INVALID_TASK;
             gMenuCooldown[playerid] = GetTickCount();
 
             DestroyMenuTextDrawInternal(playerid);
-
             PlayerPlaySound(playerid, MENU_SOUND_CLOSE, 0.0, 0.0, 0.0);
-            @.cb(MENU_RESPONSE_CLOSE, gMenuListItem[playerid]);
+
+            new
+                responses[E_ASYNC_MENU_DATA]
+            ;
+
+            responses[E_ASYNC_MENU_RESPONSE] = MENU_RESPONSE_CLOSE;
+            responses[E_ASYNC_MENU_LISTITEM] = gMenuListItem[playerid];
+            task_set_result_arr(t, responses);
+
+            return 0;
         }
-        else if ((newkeys & KEY_SPRINT) && (GetTickCount() - gMenuCooldown[playerid]) >= 200) {
+
+        if ((newkeys & KEY_SPRINT) && (GetTickCount() - gMenuCooldown[playerid]) >= 200) {
+            new const
+                Task:t = gMenuTask[playerid]
+            ;
+
+            gMenuTask[playerid] = INVALID_TASK;
             gMenuCooldown[playerid] = GetTickCount();
 
             DestroyMenuTextDrawInternal(playerid);
-            
+
             if (!gMenuCancelSelectSound[playerid]) {
                 PlayerPlaySound(playerid, MENU_SOUND_SELECT, 0.0, 0.0, 0.0);
             }
+    
+            new
+                responses[E_ASYNC_MENU_DATA]
+            ;
 
-            @.cb(MENU_RESPONSE_SELECT, gMenuListItem[playerid]);
+            responses[E_ASYNC_MENU_RESPONSE] = MENU_RESPONSE_SELECT;
+            responses[E_ASYNC_MENU_LISTITEM] = gMenuListItem[playerid];
+            task_set_result_arr(t, responses);
         }
-
-        Indirect_Release(cb);
     }
 
-    return 1;
+    return 0;
 }
 
 hook OnPlayerUpdate(playerid) {
-    if (gMenuCallback[playerid] != MENU_CB_NONE) {
+    if (gMenuList[playerid] != INVALID_LIST) {
         static
             updown, unused
-        ;
-
-        new const
-            Func:cb<ii> = gMenuCallback[playerid]
         ;
 
         GetPlayerKeys(playerid, KEY:unused, updown, unused);
@@ -382,7 +373,9 @@ hook OnPlayerUpdate(playerid) {
             gMenuCooldown[playerid] = GetTickCount();
 
             if (gMenuListItem[playerid] == 0) {
-                return PlayerPlaySound(playerid, MENU_SOUND_ERROR, 0.0, 0.0, 0.0);
+                PlayerPlaySound(playerid, MENU_SOUND_ERROR, 0.0, 0.0, 0.0);
+
+                return 0;
             }
 
             gMenuListItem[playerid]--;
@@ -394,13 +387,17 @@ hook OnPlayerUpdate(playerid) {
             }
 
             PlayerPlaySound(playerid, MENU_SOUND_UPDOWN, 0.0, 0.0, 0.0);
-            @.cb(MENU_RESPONSE_UP, gMenuListItem[playerid]);
+
+            return 0;
         }
-        else if (updown == KEY_DOWN && (GetTickCount() - gMenuCooldown[playerid]) >= 200) {
+
+        if (updown == KEY_DOWN && (GetTickCount() - gMenuCooldown[playerid]) >= 200) {
             gMenuCooldown[playerid] = GetTickCount();
 
             if (gMenuListItem[playerid] == gMenuItemSize[playerid]) {
-                return PlayerPlaySound(playerid, MENU_SOUND_ERROR, 0.0, 0.0, 0.0);
+                PlayerPlaySound(playerid, MENU_SOUND_ERROR, 0.0, 0.0, 0.0);
+
+                return 0;
             }
 
             gMenuListItem[playerid]++;
@@ -412,11 +409,10 @@ hook OnPlayerUpdate(playerid) {
             }
 
             PlayerPlaySound(playerid, MENU_SOUND_UPDOWN, 0.0, 0.0, 0.0);
-            @.cb(MENU_RESPONSE_DOWN, gMenuListItem[playerid]);
         }
     }
 
-    return 1;
+    return 0;
 }
 
 hook OnPlayerDisconnect(playerid, reason) {
@@ -431,5 +427,5 @@ hook OnPlayerDisconnect(playerid, reason) {
 
     ResetMenuDataInternal(playerid);
 
-    return 1;
+    return 0;
 }
