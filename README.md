@@ -19,9 +19,19 @@ Simply download the include file and place it in your `qawno/include` folder.
 
 ## 🛠️ Functions
 
-* **AddListMenuItem**`(playerid, column, const item[])`
-* **ShowAsyncListMenu**`(playerid, const title[], Float:x, Float:y, Float:width, bool:cancelSelectSound = false)`
-* **HideListMenu**`(playerid)`
+**AddListMenuItem**`(playerid, column, const item[])`
+> - Adds an item to the specified menu column.
+> - Items are queued internally until the menu is shown.
+
+**ShowAsyncListMenu**`(playerid, const title[], Float:x, Float:y, Float:width, bool:selectionSound = true)`
+> - Displays the menu asynchronously and returns a Task.
+> - The task resolves when the menu is closed, either by selection or cancel.
+
+**DestroyListMenu**`(playerid)`
+> - Immediately destroys the current menu and clears its internal state.
+
+**IsListMenuVisible**`(playerid)`
+> - Returns whether the menu is currently visible for the player.
 
 ## ⚡ Quick Example
 
