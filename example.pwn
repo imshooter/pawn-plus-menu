@@ -85,8 +85,6 @@ static const gAmmunationData[MAX_AMMU_CLASSES][MAX_AMMU_WEAPONS_PER_CLASS][E_AMM
     }
 };
 
-native bool:SendClientMessageStr(playerid, colour, ConstAmxString:str) = SendClientMessage;
-
 main(){}
 
 ShowAmmunationClassesMenu(playerid) {
@@ -137,10 +135,7 @@ ShowAmmunationWeaponsMenu(playerid, classid) {
     ;
 
     if (t) {
-        new
-            responses[E_ASYNC_MENU_DATA]
-        ;
-
+        new responses[E_ASYNC_MENU_DATA];
         await_arr(responses) t;
 
         if (responses[E_ASYNC_MENU_RESPONSE]) {
@@ -178,10 +173,7 @@ ShowAmmunationFinalizePurchaseMenu(playerid, classid, listItem) {
     ;
 
     if (t) {
-        new
-            responses[E_ASYNC_MENU_DATA]
-        ;
-
+        new responses[E_ASYNC_MENU_DATA];
         await_arr(responses) t;
 
         if (responses[E_ASYNC_MENU_RESPONSE]) {
