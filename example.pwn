@@ -101,14 +101,15 @@ ShowAmmunationClassesMenu(playerid) {
     ;
 
     if (t) {
-        new
-            responses[E_ASYNC_MENU_DATA]
-        ;
+        TogglePlayerControllable(playerid, false);
 
+        new responses[E_ASYNC_MENU_DATA];
         await_arr(responses) t;
 
         if (responses[E_ASYNC_MENU_RESPONSE]) {
             ShowAmmunationWeaponsMenu(playerid, responses[E_ASYNC_MENU_LISTITEM]);
+        } else {
+            TogglePlayerControllable(playerid, true);
         }
     }
 }
