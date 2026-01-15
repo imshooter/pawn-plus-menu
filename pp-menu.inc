@@ -76,12 +76,13 @@ static enum _:E_MENU_DATA {
 static enum E_PLAYER_MENU_DATA {
     List:E_PLAYER_MENU_LIST,
     Task:E_PLAYER_MENU_TASK,
-    bool:E_PLAYER_MENU_OPEN,
+    bool:E_PLAYER_MENU_OPENED,
     E_PLAYER_MENU_SIZE,
     E_PLAYER_MENU_CURRENT_ROW,
     E_PLAYER_MENU_CURRENT_ITEM,
     E_PLAYER_MENU_COOLDOWN_TIME,
-    bool:E_PLAYER_MENU_SELECTION_SOUND
+    bool:E_PLAYER_MENU_SELECTION_SOUND,
+    bool:E_PLAYER_MENU_FREEZE
 };
 
 static enum E_PLAYER_TEXT_DATA {
@@ -101,9 +102,12 @@ static
  */
 
 forward bool:AddListMenuItem(playerid, column, const item[]);
-forward Task:ShowAsyncListMenu(playerid, const title[], Float:x, Float:y, Float:width, bool:selectionSound = true);
+forward Task:ShowAsyncListMenu(playerid, const title[], Float:x, Float:y, Float:width, bool:freeze = true, bool:selectionSound = true);
 forward bool:DestroyListMenu(playerid);
 forward bool:IsListMenuVisible(playerid);
+
+forward bool:AddListMenuItemStr(playerid, column, ConstString:item);
+forward Task:ShowAsyncListMenuStr(playerid, ConstString:title, Float:x, Float:y, Float:width, bool:freeze = true, bool:selectionSound = true);
 
 /**
  * # Internal
@@ -171,7 +175,8 @@ static void:ResetMenuDataInternal(playerid) {
 
     gPlayerMenuData[playerid][E_PLAYER_MENU_LIST] = INVALID_LIST;
     gPlayerMenuData[playerid][E_PLAYER_MENU_TASK] = INVALID_TASK;
-    gPlayerMenuData[playerid][E_PLAYER_MENU_OPEN] = false;
+    gPlayerMenuData[playerid][E_PLAYER_MENU_OPENED] = false;
+    gPlayerMenuData[playerid][E_PLAYER_MENU_FREEZE] = false;
 }
 
 static void:DestroyMenuTextDrawInternal(playerid) {
@@ -184,6 +189,10 @@ static void:DestroyMenuTextDrawInternal(playerid) {
 
         gPlayerTextData[playerid][E_PLAYER_TEXT_L_COLUMN][i] = INVALID_PLAYER_TEXT_DRAW;
         gPlayerTextData[playerid][E_PLAYER_TEXT_R_COLUMN][i] = INVALID_PLAYER_TEXT_DRAW;
+    }
+
+    if (gPlayerMenuData[playerid][E_PLAYER_MENU_FREEZE]) {
+        TogglePlayerControllable(playerid, true);
     }
 
     ResetMenuDataInternal(playerid);
@@ -270,12 +279,12 @@ stock bool:AddListMenuItem(playerid, column, const item[]) {
     return true;
 }
 
-stock Task:ShowAsyncListMenu(playerid, const title[], Float:x, Float:y, Float:width, bool:selectionSound = true) {
+stock Task:ShowAsyncListMenu(playerid, const title[], Float:x, Float:y, Float:width, bool:freeze = true, bool:selectionSound = true) {
     if (!IsPlayerConnected(playerid)) {
         return INVALID_TASK;
     }
 
-    if (gPlayerMenuData[playerid][E_PLAYER_MENU_OPEN]) {
+    if (gPlayerMenuData[playerid][E_PLAYER_MENU_OPENED]) {
         printf("(ShowAsyncListMenu) -> Menu is already being shown.");
 
         return INVALID_TASK;
@@ -285,16 +294,21 @@ stock Task:ShowAsyncListMenu(playerid, const title[], Float:x, Float:y, Float:wi
         task_delete(gPlayerMenuData[playerid][E_PLAYER_MENU_TASK]);
     }
 
+    if (freeze) {
+        TogglePlayerControllable(playerid, false);
+    }
+
     new const
         Task:t = task_new()
     ;
 
     gPlayerMenuData[playerid][E_PLAYER_MENU_TASK]            = t;
-    gPlayerMenuData[playerid][E_PLAYER_MENU_OPEN]            = true;
+    gPlayerMenuData[playerid][E_PLAYER_MENU_OPENED]          = true;
     gPlayerMenuData[playerid][E_PLAYER_MENU_CURRENT_ROW]     = 0;
     gPlayerMenuData[playerid][E_PLAYER_MENU_CURRENT_ITEM]    = 0;
     gPlayerMenuData[playerid][E_PLAYER_MENU_SIZE]            = (list_size(gPlayerMenuData[playerid][E_PLAYER_MENU_LIST]) - 1);
     gPlayerMenuData[playerid][E_PLAYER_MENU_SELECTION_SOUND] = selectionSound;
+    gPlayerMenuData[playerid][E_PLAYER_MENU_FREEZE]          = freeze;
 
     CreateMenuTextDrawInternal(playerid, title, x, y, width);
     UpdateMenuListRowsInternal(playerid);
@@ -307,7 +321,7 @@ stock bool:DestroyListMenu(playerid) {
         return false;
     }
 
-    if (gPlayerMenuData[playerid][E_PLAYER_MENU_OPEN]) {
+    if (gPlayerMenuData[playerid][E_PLAYER_MENU_OPENED]) {
         return false;
     }
 
@@ -321,7 +335,7 @@ stock bool:IsListMenuVisible(playerid) {
         return false;
     }
 
-    return gPlayerMenuData[playerid][E_PLAYER_MENU_OPEN];
+    return gPlayerMenuData[playerid][E_PLAYER_MENU_OPENED];
 }
 
 stock bool:AddListMenuItemStr(playerid, column, ConstString:item) {
@@ -330,10 +344,10 @@ stock bool:AddListMenuItemStr(playerid, column, ConstString:item) {
     return AddListMenuItem(playerid, column, buffer);
 }
 
-stock Task:ShowAsyncListMenuStr(playerid, ConstString:title, Float:x, Float:y, Float:width, bool:selectionSound = true) {
+stock Task:ShowAsyncListMenuStr(playerid, ConstString:title, Float:x, Float:y, Float:width, bool:freeze = true, bool:selectionSound = true) {
     new buffer[MAX_MENU_TITLE_LENGTH];
     str_get(title, buffer);
-    return ShowAsyncListMenu(playerid, buffer, x, y, width, selectionSound);
+    return ShowAsyncListMenu(playerid, buffer, x, y, width, selectionSound, freeze);
 }
 
 /**
@@ -341,7 +355,7 @@ stock Task:ShowAsyncListMenuStr(playerid, ConstString:title, Float:x, Float:y, F
  */
 
 hook OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys) {
-    if (gPlayerMenuData[playerid][E_PLAYER_MENU_OPEN]) {
+    if (gPlayerMenuData[playerid][E_PLAYER_MENU_OPENED]) {
         if ((newkeys & KEY_SPRINT) && (GetTickCount() - gPlayerMenuData[playerid][E_PLAYER_MENU_COOLDOWN_TIME]) >= MENU_COOLDOWN_MILISECONDS) {
             new const
                 Task:t = gPlayerMenuData[playerid][E_PLAYER_MENU_TASK]
@@ -392,7 +406,7 @@ hook OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys) {
 }
 
 hook OnPlayerUpdate(playerid) {
-    if (gPlayerMenuData[playerid][E_PLAYER_MENU_OPEN]) {
+    if (gPlayerMenuData[playerid][E_PLAYER_MENU_OPENED]) {
         new
             updown, unused
         ;
