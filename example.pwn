@@ -1,8 +1,6 @@
 #include <open.mp>
 #include <humanize>
 
-#define PP_SYNTAX_@
-#define PP_SYNTAX_STRING_OP
 #define PP_SYNTAX_AWAIT
 #define PP_SYNTAX_YIELD
 
@@ -11,7 +9,7 @@
 #define MAX_AMMU_CLASSES (8)
 #define MAX_AMMU_WEAPONS_PER_CLASS (4)
 
-static const gAmmunationClassNames[][MAX_MENU_ITEM_LENGTH] = {
+static const gAmmunationClassNames[MAX_AMMU_CLASSES][MAX_MENU_ITEM_LENGTH] = {
     "Pistols",      // 0
     "Micro SMGs",   // 1
     "Shotguns",     // 2
