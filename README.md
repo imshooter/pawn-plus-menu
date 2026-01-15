@@ -23,7 +23,7 @@ Simply download the include file and place it in your `qawno/include` folder.
 > - Adds an item to the specified menu column.
 > - Items are queued internally until the menu is shown.
 
-**ShowAsyncListMenu**`(playerid, const title[], Float:x, Float:y, Float:width, bool:selectionSound = true)`
+**ShowAsyncListMenu**`(playerid, const title[], Float:x, Float:y, Float:width, bool:freeze = true, bool:selectionSound = true)`
 > - Displays the menu asynchronously and returns a Task.
 > - The task resolves when the menu is closed, either by selection or cancel.
 
